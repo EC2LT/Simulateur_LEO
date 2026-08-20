@@ -1,5 +1,5 @@
 ### Téléchargement du TLE
 
 ```bash
-git clone https://github.com/mon-compte/mon-projet.git
+curl -o data/tle/starlink.txt "https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle"
 ```
