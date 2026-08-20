@@ -5,7 +5,7 @@
 Clonez le projet avec la commande suivante :
 
 ```bash
-git clone https://github.com/mon-compte/mon-projet.git
+git clone https://github.com/EC2LT/Simulateur_LEO.git
 ```
 
 Entrez ensuite dans le dossier :
