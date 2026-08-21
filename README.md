@@ -11,7 +11,7 @@ git clone https://github.com/EC2LT/Simulateur_LEO.git
 Entrez ensuite dans le dossier :
 
 ```bash
-cd mon-projet
+cd Simulateur_LEO
 ```
 
 Installez les dépendances :
