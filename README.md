@@ -51,5 +51,5 @@ Logs
 <img width="605" height="317" alt="image" src="https://github.com/user-attachments/assets/f3f989b5-edc4-4e18-8556-fff2aa6baa80" />
 
 
-Interface
+Interface du simulateur
 <img width="1782" height="749" alt="image" src="https://github.com/user-attachments/assets/c11fdce6-3c0a-4dea-9347-abbcedec7472" />
