@@ -1,67 +1,91 @@
 import numpy as np
-from skyfield.api import load, wgs84
-
-C_LIGHT = 299792.458  # Vitesse de la lumière en km/s
-FREQ_KU = 12.0e9      # 12 GHz Bande Ku
+from skyfield.api import wgs84
 
 def compute_ground_station_metrics(satellites, positions_dict, t_skyfield, gs_lat, gs_lon, min_elevation=25.0):
-    ts = load.timescale()
-    station = wgs84.latlon(gs_lat, gs_lon)
-    num_steps = len(t_skyfield)
+    ts_len = len(t_skyfield)
+    gs_location = wgs84.latlon(gs_lat, gs_lon)
 
-    best_elevation = np.full(num_steps, 0.0)
-    best_distance = np.full(num_steps, np.nan)
-    best_rtt = np.full(num_steps, np.nan)
-    best_doppler = np.full(num_steps, 0.0)
-    best_sat_names = [None] * num_steps
-    visible_count = np.zeros(num_steps, dtype=int)
-
-    gs_pos = station.at(t_skyfield).position.km  # Shape: (3, N_steps)
-
-    for sat in satellites:
-        sat_pos = positions_dict[sat.name]
-        rel_pos = sat_pos - gs_pos
-        distances = np.linalg.norm(rel_pos, axis=0)
-
-        topocentric = (sat - station).at(t_skyfield)
-        alt, _, _ = topocentric.altaz()
-        elevations = alt.degrees
-
-        visible_mask = elevations >= min_elevation
-        visible_count += visible_mask.astype(int)
-
-        velocities = topocentric.velocity.km_per_s
-        radial_velocities = np.einsum('ij,ij->j', rel_pos, velocities) / distances
-        doppler_shift = - (radial_velocities / C_LIGHT) * FREQ_KU
-
-        # Calcul RTT physique réaliste : 2 x Distance / c + délai traitement (~12 ms)
-        rtt_ms = ((2.0 * distances) / C_LIGHT) * 1000.0 + 12.0
-
-        for i in range(num_steps):
-            if visible_mask[i] and elevations[i] > best_elevation[i]:
-                best_elevation[i] = elevations[i]
-                best_distance[i] = distances[i]
-                best_rtt[i] = rtt_ms[i]
-                best_doppler[i] = doppler_shift[i]
-                best_sat_names[i] = sat.name
-
-    # Détection propre des Handovers (Commutations)
+    rtt_list = []
+    doppler_list = []
+    elevation_list = []
+    visible_count_list = []
+    active_sats = []
     handovers = []
-    for i in range(1, num_steps):
-        if best_sat_names[i] != best_sat_names[i-1] and best_sat_names[i] is not None and best_sat_names[i-1] is not None:
-            handovers.append(i)
 
-    # Nettoyage des valeurs RTT manquantes par interpolation si nécessaire
-    nans = np.isnan(best_rtt)
-    if np.any(nans):
-        best_rtt[nans] = np.interp(np.flatnonzero(nans), np.flatnonzero(~nans), best_rtt[~nans])
+    current_sat = None
+    c = 299792.458  # km/s
+    f0 = 12e9       # Bande Ku (12 GHz)
+
+    for i in range(ts_len):
+        t = t_skyfield[i]
+        visible_sats_at_t = []
+        
+        for sat in satellites:
+            difference = sat - gs_location
+            topocentric = difference.at(t)
+            alt, az, distance = topocentric.altaz()
+            
+            elev_deg = alt.degrees
+            if elev_deg >= min_elevation:
+                pos = topocentric.position.km
+                vel = topocentric.velocity.km_per_s
+                range_rate = np.dot(pos, vel) / np.linalg.norm(pos)
+                
+                visible_sats_at_t.append({
+                    'sat': sat,
+                    'name': sat.name,
+                    'elevation': elev_deg,
+                    'distance': distance.km,
+                    'range_rate': range_rate
+                })
+
+        visible_count_list.append(len(visible_sats_at_t))
+
+        if not visible_sats_at_t:
+            current_sat = None
+            rtt_list.append(np.nan)
+            doppler_list.append(0)
+            elevation_list.append(0)
+            active_sats.append("Aucun")
+            continue
+
+        visible_sats_at_t.sort(key=lambda x: x['elevation'], reverse=True)
+        best_sat_info = visible_sats_at_t[0]
+
+        # RÈGLE DE HANDOVER (Hystérésis de 10°)
+        if current_sat is None:
+            current_sat_info = best_sat_info
+            if i > 0:
+                handovers.append(i)
+        else:
+            match = next((s for s in visible_sats_at_t if s['name'] == current_sat['name']), None)
+            
+            # Conserve le satellite tant qu'il reste à au moins 40° ET n'est pas dépassé de 10°
+            if match and match['elevation'] > 40.0 and (best_sat_info['elevation'] - match['elevation'] < 10.0):
+                current_sat_info = match
+            else:
+                current_sat_info = best_sat_info
+                handovers.append(i)
+
+        current_sat = current_sat_info
+
+        # Calcul RTT Aller-Retour Terre-Satellite-Terre (ms) + Latence minimale de traitement (~15ms)
+        rtt_prop_ms = (2 * current_sat_info['distance'] / c) * 1000.0
+        rtt_total_ms = rtt_prop_ms + 15.0  # Latence matérielle/traitement
+
+        # Doppler (kHz)
+        doppler_hz = - (current_sat_info['range_rate'] / c) * f0
+
+        rtt_list.append(rtt_total_ms)
+        doppler_list.append(doppler_hz)
+        elevation_list.append(current_sat_info['elevation'])
+        active_sats.append(current_sat_info['name'])
 
     return {
-        "elevation": best_elevation,
-        "distance": best_distance,
-        "rtt": best_rtt,
-        "doppler": best_doppler,
-        "visible_count": visible_count,
-        "active_sats": best_sat_names,
+        "rtt": np.array(rtt_list),
+        "doppler": np.array(doppler_list),
+        "elevation": np.array(elevation_list),
+        "visible_count": np.array(visible_count_list),
+        "active_sats": active_sats,
         "handovers": handovers
     }

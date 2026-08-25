@@ -1,6 +1,5 @@
 import datetime
 import os
-import urllib.request
 from src.orbital import load_satellites_from_tle, propagate_constellation_vectorized
 from src.performance import compute_ground_station_metrics
 from src.visualization import display_dashboard
@@ -29,8 +28,10 @@ def run_simulation():
     print(f"[1/4] Chargement des TLE depuis {tle_path}...")
     satellites = load_satellites_from_tle(tle_path)
 
+    # Heure fixe sur 60 minutes
+    # start_time = datetime.datetime(2026, 8, 20, 15, 35, 0, tzinfo=datetime.timezone.utc)
     start_time = datetime.datetime.now(datetime.timezone.utc)
-    duration_minutes = 120
+    duration_minutes = 60
     step_seconds = 60
 
     times_list = [
@@ -48,9 +49,34 @@ def run_simulation():
         satellites, positions_dict, t_skyfield, GS_LAT, GS_LON, min_elevation=25.0
     )
 
-    print(f"      -> {len(metrics['handovers'])} handovers détectés sur 2 heures.")
+    print("\n" + "="*70)
+    print("  LOGS DE VISIBILITÉ ET PERFORMANCES (EXTRAIT DES 10 PREMIERS PAS)")
+    print("="*70)
+    
+    active_sats = metrics["active_sats"]
+    elevations = metrics["elevation"]
+    rtts = metrics["rtt"]
+    visible_counts = metrics["visible_count"]
 
-    print("[4/4] Affichage de l'interface...")
+    for i in range(min(10, duration_minutes)):
+        t_label = time_labels[i]
+        sat_actif = active_sats[i]
+        elev = elevations[i]
+        rtt = rtts[i]
+        nb_vis = visible_counts[i]
+        
+        is_handover = " [HANDOVER]" if i in metrics["handovers"] else ""
+
+        print(f"[{t_label} UTC]{is_handover}")
+        print(f"  ├─ Satellite Connecté : {sat_actif}")
+        print(f"  ├─ Élévation Actuelle : {elev:.2f}°")
+        print(f"  ├─ RTT Estimé         : {rtt:.2f} ms")
+        print(f"  └─ Total Satellites Visibles (>=25°) : {nb_vis}")
+        print("-" * 50)
+
+    print(f"\n[INFO] Total : {len(metrics['handovers'])} handovers détectés sur 1 heure.")
+
+    print("\n[4/4] Affichage du Tableau de Bord...")
     display_dashboard(satellites, positions_dict, metrics, time_labels, GS_LAT, GS_LON)
 
 if __name__ == "__main__":

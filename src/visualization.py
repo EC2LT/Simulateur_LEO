@@ -73,7 +73,7 @@ def display_dashboard(satellites, positions_dict, metrics, time_labels, gs_lat, 
     ax_rtt.set_ylabel("ms")
     ax_rtt.set_xticks(tick_positions)
     ax_rtt.set_xticklabels(tick_labels, rotation=25, ha='right', fontsize=8)
-    ax_rtt.set_ylim(20, 50)  # Échelle verrouillée pour la lisibilité
+    ax_rtt.set_ylim(15, 40)  # Échelle verrouillée pour la lisibilité
     ax_rtt.grid(True, linestyle=':', alpha=0.6)
     ax_rtt.legend(fontsize=7, loc='upper right')
 

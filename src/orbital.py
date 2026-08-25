@@ -1,36 +1,39 @@
 import numpy as np
-from skyfield.api import load, EarthSatellite
+from skyfield.api import load
 
-def load_satellites_from_tle(tle_file_path):
+def load_satellites_from_tle(tle_path):
     """
-    Charge les satellites à partir d'un fichier TLE local.
+    Charge les satellites depuis le fichier TLE et filtre exclusivement 
+    la constellation Starlink (LEO) pour écarter les satellites GEO/MEO.
     """
-    ts = load.timescale()
-    satellites = load.tle_file(tle_file_path, ts=ts)
-    return satellites
+    raw_satellites = load.tle_file(tle_path)
+    
+    # Filtre strict : Uniquement les satellites Starlink
+    starlink_satellites = [
+        sat for sat in raw_satellites 
+        if "STARLINK" in sat.name.upper()
+    ]
+    
+    print(f"  └─ {len(starlink_satellites)} satellites Starlink (LEO) retenus sur {len(raw_satellites)} TLE au total.")
+    return starlink_satellites
 
 def propagate_constellation_vectorized(satellites, times_list):
     """
-    Calcule les positions (x, y, z) géocentriques en km
-    pour TOUS les satellites et TOUS les pas de temps simultanément.
-    
-    Retourne:
-        dict: {sat_name: array_3d de shape (3, N_steps)}
+    Propage les orbites de l'ensemble des satellites retenus sur l'intervalle temporel donné.
     """
     ts = load.timescale()
-    # Conversion de la liste de datetimes UTC en un objet Time vectorisé Skyfield
-    t_skyfield = ts.utc(
-        [t.year for t in times_list],
-        [t.month for t in times_list],
-        [t.day for t in times_list],
-        [t.hour for t in times_list],
-        [t.minute for t in times_list],
-        [t.second for t in times_list]
-    )
     
-    positions = {}
+    t_skyfield = ts.utc([t.year for t in times_list],
+                        [t.month for t in times_list],
+                        [t.day for t in times_list],
+                        [t.hour for t in times_list],
+                        [t.minute for t in times_list],
+                        [t.second for t in times_list])
+    
+    positions_dict = {}
+    
     for sat in satellites:
         geocentric = sat.at(t_skyfield)
-        positions[sat.name] = geocentric.position.km  # Matrice (3, N_steps)
+        positions_dict[sat.name] = geocentric.position.km
         
-    return positions, t_skyfield
+    return positions_dict, t_skyfield
