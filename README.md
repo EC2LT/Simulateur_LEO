@@ -32,6 +32,18 @@ Lancez finalement l'application :
 python3 main.py
 ```
 
+## Utilisation d'environnement virtuel python (recommandé)
+
+Création de l'environnement virtuel
+```bash
+python3 -m venv venv
+```
+
+On active l'environnement
+```bash
+source venv/bin/active
+```
+
 ## Image de simulation
 
 Logs
