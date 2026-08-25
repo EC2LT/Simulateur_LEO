@@ -24,7 +24,7 @@ python3 -m venv venv
 On active l'environnement
 ```bash
 source venv/bin/active
-```s
+```
 
 Installez les dépendances :
 
